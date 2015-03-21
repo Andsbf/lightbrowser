@@ -1,6 +1,12 @@
 module LightBrow
   class Browser
 
+    attr_accessor :history_index
+
+    def initialize
+      @history_index = 0
+    end
+
     def run
       welcome
       loop do
@@ -61,19 +67,41 @@ COMMANDS:
     end
 
     def back
-      visit(Page.last.address)
+      page = Page.where("created_at < ?", @current_page.created_at).order('created_at DESC').first
+      
+      if page
+        fetch_and_render_page(page.address)
+        @current_page = page
+      else
+        puts 'There is no page backawrd!!!'
+      end 
     end
 
     def forward
-      puts "Forward not implemented :(".white.on_red.blink
+      page = Page.where("created_at > ?", @current_page.created_at).order('created_at ASC').first
+
+      if page
+        fetch_and_render_page(page.address)
+        @current_page = page
+      else
+        puts 'There is no page foward!!!'
+      end
     end
 
-    def visit(url)
+    def fetch_and_render_page(url)
       if response = fetch(url)
         @page = HTMLPage.new(response.body)
         display rescue puts " ! Invalid URL ! ".black.on_red
       else
         puts " ! Invalid URL ! ".black.on_red
+      end
+    end
+
+    def visit(url)
+      if fetch_and_render_page(url)
+        Page.delete_all(["created_at > ?", @current_page.created_at]) if @current_page
+        @current_page = Page.create(address: @input)
+        # User.first.pages << @current_page
       end
     end
 
@@ -85,8 +113,9 @@ COMMANDS:
 
       case response
       when Net::HTTPSuccess then
-        User.last.pages << Page.create(address: @input)
+        
         response
+
       when Net::HTTPRedirection then
         location = response['location']
         warn "redirected to #{location}"
